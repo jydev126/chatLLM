@@ -25,9 +25,16 @@ app.add_middleware(
 )
 
 # 创建LLM实例
+# llm = ChatOpenAI(
+#     model="gpt-4o-mini",  # 使用更经济的模型
+#     temperature=0.7,  # 控制回答的创造性，0更保守，1更创造性
+# )
+
 llm = ChatOpenAI(
-    model="gpt-4o-mini",  # 使用更经济的模型
-    temperature=0.7,  # 控制回答的创造性，0更保守，1更创造性
+    model="deepseek-chat",  # 替换为您想使用的模型名称
+    temperature=0.7,
+    openai_api_key=os.getenv("DEEPSEEK_API_KEY"),  # 使用DeepSeed API密钥
+    openai_api_base="https://api.deepseek.com/v1",  # 新的 API 基础地址
 )
 
 # 添加基础聊天路由
