@@ -1,12 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from langchain_openai import ChatOpenAI  # 导入OpenAI聊天模型
-from langserve import add_routes  # 用于添加API路由
 from fastapi.middleware.cors import CORSMiddleware  # 处理跨域
 from dotenv import load_dotenv  # 环境变量管理
 import os
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationChain
+from pydantic import BaseModel
 
 # 加载环境变量（确保你有.env文件包含 OPENAI_API_KEY=你的密钥）
 load_dotenv()
+
+class ChatInput(BaseModel):
+    message: str
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -24,28 +29,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 创建LLM实例
-# llm = ChatOpenAI(
-#     model="gpt-4o-mini",  # 使用更经济的模型
-#     temperature=0.7,  # 控制回答的创造性，0更保守，1更创造性
-# )
-
 llm = ChatOpenAI(
-    model="deepseek-chat",  # 替换为您想使用的模型名称
+    model="deepseek-chat",  
     temperature=0.7,
     openai_api_key=os.getenv("DEEPSEEK_API_KEY"),  # 使用DeepSeed API密钥
     openai_api_base="https://api.deepseek.com/v1",  # 新的 API 基础地址
 )
 
-# 添加基础聊天路由
-# 这会自动创建以下端点：
-# POST /chat/invoke - 单次对话
-# POST /chat/stream - 流式对话（一个字一个字返回）
-add_routes(
-    app,
-    llm,
-    path="/chat",  # API路径
+# 创建记忆实例
+memory = ConversationBufferMemory()
+
+# 创建带记忆的对话链
+conversation = ConversationChain(
+    llm=llm,
+    memory=memory,
+    verbose=True
 )
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.post("/chat")
+async def chat_endpoint(chat_input: ChatInput):
+    try:
+        # Get response from conversation chain
+        response = conversation.predict(input=chat_input.message)
+        
+        # Ensure response is properly formatted
+        if not response:
+            raise HTTPException(status_code=500, detail="No response generated")
+            
+        # Return structured response
+        return {
+            "status": "success",
+            "output": response,
+            "history": memory.chat_memory.messages
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error processing chat: {str(e)}"
+        )
 
 # 启动服务器
 if __name__ == "__main__":
